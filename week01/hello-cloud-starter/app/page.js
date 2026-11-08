@@ -1,8 +1,152 @@
+"use client";
+
+import { useState } from "react";
+
+const MAX_URL_LENGTH = 2048;
+
+function validateUrl(value) {
+  const trimmedUrl = value.trim();
+
+  if (trimmedUrl === "") {
+    return "URL을 입력해 주세요.";
+  }
+
+  if (trimmedUrl.length > MAX_URL_LENGTH) {
+    return "URL은 2048자 이하로 입력해 주세요.";
+  }
+
+  if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+    return "URL은 http:// 또는 https://로 시작해야 합니다.";
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedUrl);
+    const hostname = parsedUrl.hostname;
+
+    // e.g. http://abcde 처럼 도메인에 점(.)이 없는 경우 차단
+    if (!hostname.includes(".") || hostname.startsWith(".") || hostname.endsWith(".")) {
+      return "올바른 URL 형식으로 입력해 주세요";
+    }
+  } catch {
+    return "올바른 URL 형식으로 입력해 주세요";
+  }
+
+  return null;
+}
+
 export default function Home() {
+  const [originalUrl, setOriginalUrl] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  function handleChange(event) {
+    setOriginalUrl(event.target.value);
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    setError("");
+    setResult("");
+
+    const validationError = validateUrl(originalUrl);
+
+    if (validationError !== null) {
+      setError(validationError);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/shorten", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          originalUrl,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error?.message || "요청 처리에 실패했습니다.");
+        return;
+      }
+
+      setResult(data.shortUrl);
+    } catch {
+      setError("서버에 연결할 수 없습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
-    <main>
-      <h1>Hello Cloud page!</h1>
-      <p>Let's go!</p>
+    <main className="page-shell">
+      <section className="url-card" aria-labelledby="page-title">
+        <div className="week-label">CLOUD COMPUTING</div>
+
+        <div className="intro">
+          <h1 id="page-title">URL Shortener</h1>
+          <p>
+            긴 URL을 입력하고, 안전하게 처리할 수 있는 값인지 확인해 보세요.
+          </p>
+        </div>
+
+        <form className="url-form" onSubmit={handleSubmit} noValidate>
+          <label htmlFor="original-url">줄이고 싶은 URL</label>
+          <div className="input-row">
+            <input
+              id="original-url"
+              name="originalUrl"
+              type="text"
+              inputMode="url"
+              placeholder="https://example.com/very-long-url"
+              value={originalUrl}
+              onChange={handleChange}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "url-error" : undefined}
+              disabled={isLoading}
+            />
+            <button type="submit" disabled={isLoading}>
+              {isLoading ? "Checking..." : "Shorten"}
+            </button>
+          </div>
+
+          <div className="message-area" aria-live="polite">
+            {error && (
+              <p id="url-error" className="message message-error" role="alert">
+                {error}
+              </p>
+            )}
+
+            {isLoading && (
+              <p className="message message-loading" role="status">
+                <span className="spinner" aria-hidden="true" />
+                입력한 URL을 확인하고 있습니다.
+              </p>
+            )}
+
+            {result && (
+              <p className="message message-success" role="status">
+                {result}
+              </p>
+            )}
+          </div>
+        </form>
+
+        <aside className="practice-note">
+          <span aria-hidden="true">✓</span>
+          <p>
+            같은 URL은 기존 short URL을 돌려주고, 이 서비스 자체의 주소는
+            단축할 수 없습니다.
+          </p>
+        </aside>
+      </section>
     </main>
   );
 }
